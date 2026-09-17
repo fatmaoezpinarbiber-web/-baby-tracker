@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f7f3ef">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Baby Tracker</title>
+<link rel="manifest" href="manifest.json">
+<style>
+:root{--bg:#f7f3ef;--card:#fff;--text:#282421;--muted:#7d746d;--line:#e9e1db;--accent:#a86f57}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif}
+main{max-width:520px;margin:auto;padding:calc(24px + env(safe-area-inset-top)) 18px calc(30px + env(safe-area-inset-bottom))}
+h1{font-size:32px;margin:4px 0 3px}.sub{color:var(--muted);margin-bottom:24px}
+.summary{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:18px;margin-bottom:18px}
+.summary b{font-size:25px}.summary span{color:var(--muted)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+button{border:0;font:inherit;cursor:pointer}
+.side{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:25px 12px;min-height:155px;color:var(--text)}
+.side .name{font-size:22px;font-weight:700}.side .action{margin-top:18px;color:var(--accent);font-weight:700}
+.active{border:2px solid var(--accent);background:#fffaf7}.timer{font-variant-numeric:tabular-nums;font-size:18px;margin-top:10px}
+h2{font-size:21px;margin:28px 2px 12px}.empty{color:var(--muted);padding:18px 2px}
+.row{background:var(--card);border:1px solid var(--line);border-radius:17px;padding:14px 15px;margin:9px 0;display:flex;justify-content:space-between;align-items:center}
+.row small{display:block;color:var(--muted);margin-top:4px}.dur{font-weight:700}
+.delete{background:transparent;color:#a56b5b;font-size:18px;padding:6px}
+.footer{text-align:center;color:var(--muted);font-size:12px;margin-top:25px}
+</style>
+</head>
+<body>
+<main>
+<h1>🍼 Baby Tracker</h1>
+<div class="sub" id="date"></div>
+
+<div class="summary">
+  <span>Bugün</span><br>
+  <b id="summary">0 seans · 0 dk</b>
+</div>
+
+<div class="grid">
+<button class="side" id="left" onclick="toggle('Left')">
+  <div class="name">LEFT</div><div class="action" id="leftAction">▶ START</div><div class="timer" id="leftTimer"></div>
+</button>
+<button class="side" id="right" onclick="toggle('Right')">
+  <div class="name">RIGHT</div><div class="action" id="rightAction">▶ START</div><div class="timer" id="rightTimer"></div>
+</button>
+</div>
+
+<h2>Geçmiş</h2>
+<div id="history"></div>
+<div class="footer">Veriler bu cihazda lokal olarak saklanır.</div>
+</main>
+<script>
+const KEY='baby_tracker_nursing_v1';
+let sessions=JSON.parse(localStorage.getItem(KEY)||'[]');
+let active=JSON.parse(localStorage.getItem(KEY+'_active')||'null');
+
+function save(){localStorage.setItem(KEY,JSON.stringify(sessions));localStorage.setItem(KEY+'_active',JSON.stringify(active));render();}
+function fmtTime(d){return new Date(d).toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});}
+function fmtDate(d){return new Date(d).toLocaleDateString('tr-TR',{day:'2-digit',month:'2-digit',year:'numeric'});}
+function duration(ms){let s=Math.max(0,Math.floor(ms/1000));let m=Math.floor(s/60), sec=s%60; return m?`${m} dk${sec?` ${sec} sn`:''}`:`${sec} sn`;}
+function today(x){let d=new Date(x),n=new Date();return d.getFullYear()==n.getFullYear()&&d.getMonth()==n.getMonth()&&d.getDate()==n.getDate();}
+function toggle(side){
+  if(active){
+    if(active.side===side){
+      const end=Date.now(); sessions.unshift({id:Date.now(),side,start:active.start,end,duration:end-active.start});
+      active=null; save(); return;
+    } else { alert('Önce '+active.side+' seansını durdur.'); return; }
+  }
+  active={side,start:Date.now()}; save();
+}
+function del(id){sessions=sessions.filter(x=>x.id!==id);save();}
+function render(){
+  document.getElementById('date').textContent=new Date().toLocaleDateString('tr-TR',{weekday:'long',day:'numeric',month:'long'});
+  const todaySessions=sessions.filter(x=>today(x.start));
+  let total=todaySessions.reduce((a,x)=>a+x.duration,0);
+  if(active&&today(active.start)) total+=Date.now()-active.start;
+  document.getElementById('summary').textContent=`${todaySessions.length+(active&&today(active.start)?1:0)} seans · ${Math.floor(total/60000)} dk`;
+  ['Left','Right'].forEach(side=>{
+    let key=side.toLowerCase(), b=document.getElementById(key), a=document.getElementById(key+'Action'), t=document.getElementById(key+'Timer');
+    let on=active&&active.side===side;
+    b.className='side'+(on?' active':''); a.textContent=on?'■ STOP':'▶ START'; t.textContent=on?duration(Date.now()-active.start):'';
+  });
+  const h=document.getElementById('history');
+  if(!sessions.length){h.innerHTML='<div class="empty">Henüz kayıt yok.</div>';return;}
+  h.innerHTML=sessions.slice(0,50).map(x=>`<div class="row"><div><b>${x.side}</b><small>${fmtDate(x.start)} · ${fmtTime(x.start)} – ${fmtTime(x.end)}</small></div><div><span class="dur">${duration(x.duration)}</span> <button class="delete" onclick="del(${x.id})">×</button></div></div>`).join('');
+}
+setInterval(render,1000); render();
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body></html>
